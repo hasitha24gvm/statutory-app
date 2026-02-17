@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Log In</title>
+  <link href="bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons CDN for professional eye icon -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <style>
+    body {
+      background: #f8f9fa;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+    }
+    .login-card {
+      max-width: 480px;
+      width: 100%;
+      padding: 40px 32px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.12);
+    }
+    h1 {
+      text-align: center;
+      color: #1a1a1a;
+      font-size: 28px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #6c757d;
+      font-size: 15px;
+      margin-bottom: 32px;
+    }
+    .form-label {
+      color: #343a40;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 6px;
+    }
+    .form-control {
+      border-radius: 10px;
+      border: 1px solid #ced4da;
+      padding: 12px 16px;
+      font-size: 15px;
+      transition: border-color 0.2s;
+    }
+    .form-control:focus {
+      border-color: #0d6efd;
+      box-shadow: 0 0 0 0.25rem rgba(13,110,253,.1);
+    }
+    .btn-signin {
+      background: #212529;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    .btn-signin:hover {
+      background: #343a40;
+    }
+    .btn-send-code {
+      background: #0d6efd;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 14px;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .btn-send-code:hover {
+      background: #0b5ed7;
+    }
+    .password-wrapper {
+      position: relative;
+    }
+    .password-toggle {
+      position: absolute;
+      right: 16px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: #6c757d;
+      font-size: 1.2rem;
+    }
+    .form-check-label {
+      font-size: 14px;
+      color: #495057;
+    }
+    .forgot-link {
+      color: #0d6efd;
+      font-size: 14px;
+      text-decoration: none;
+    }
+    .forgot-link:hover {
+      text-decoration: underline;
+    }
+    .social-btns {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-top: 24px;
+    }
+    .social-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+      text-decoration: none;
+      transition: transform 0.2s;
+    }
+    .social-btn:hover {
+      transform: translateY(-2px);
+    }
+    .google { background: #db4437; }
+    .facebook { background: #3b5998; }
+    .linkedin { background: #0077b5; }
+  </style>
+</head>
+<body>
+
+  <div class="login-card">
+    <h1>Log In</h1>
+    <p class="subtitle">Welcome back! Please enter your details.</p>
+
+    <form id="loginForm" action="/login" method="POST">
+      <div class="row g-3">
+        <!-- Email column -->
+        <div class="col-md-7">
+          <label class="form-label" for="email">Email</label>
+          <input type="email" name="email" id="email" class="form-control" placeholder="yourname@gmail.com" required>
+          
+          <!-- Send Code button right below email -->
+          <button type="button" id="sendCodeBtn" class="btn-send-code">
+            Send Code to Email
+          </button>
+        </div>
+
+        <!-- Password column -->
+        <div class="col-md-5">
+          <label class="form-label" for="password">Password / Code</label>
+          <div class="password-wrapper">
+            <input type="password" name="password" id="password" class="form-control" placeholder="Enter code from email" required>
+            <i class="bi bi-eye-slash password-toggle" id="togglePassword"></i>
+          </div>
+        </div>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="rememberMe">
+          <label class="form-check-label" for="rememberMe">
+            Remember me
+          </label>
+        </div>
+        <a href="#" class="forgot-link" onclick="showReset()">Forgot password?</a>
+      </div>
+
+      <button type="submit" class="btn-signin">Sign In</button>
+    </form>
+
+    <!-- Social login (placeholders) -->
+    <p class="text-center mt-4 mb-3" style="color: #6c757d; font-size: 14px;">Or sign in with</p>
+    <div class="social-btns">
+      <a href="#" class="social-btn google">G</a>
+      <a href="#" class="social-btn facebook">f</a>
+      <a href="#" class="social-btn linkedin">in</a>
+    </div>
+
+    <!-- Admin Reset Form (hidden by default) -->
+    <div id="resetForm" style="display: none; margin-top: 32px;">
+      <hr class="my-4">
+      <h2 style="font-size: 18px; text-align: center; color: #343a40;">Admin Password Reset</h2>
+      <form action="/reset" method="POST" class="mt-3">
+        <input type="email" name="email" placeholder="Enter admin email" class="form-control mb-3" required>
+        <button type="submit" class="btn-signin">Reset Password</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // Send Code Button
+    document.getElementById('sendCodeBtn').addEventListener('click', () => {
+      const email = document.getElementById('email').value;
+      if (!email) {
+        alert('Please enter your email first');
+        return;
+      }
+      fetch('/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      })
+      .then(res => res.text())
+      .then(msg => alert(msg))
+      .catch(err => alert('Error sending code'));
+    });
+
+    // Professional password toggle (eye / eye-slash)
+    const togglePassword = document.getElementById('togglePassword');
+    const password = document.getElementById('password');
+
+    togglePassword.addEventListener('click', () => {
+      const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+      password.setAttribute('type', type);
+      togglePassword.classList.toggle('bi-eye');
+      togglePassword.classList.toggle('bi-eye-slash');
+    });
+
+    // Show admin reset form
+    function showReset() {
+      document.getElementById('resetForm').style.display = 'block';
+    }
+  </script>
+</body>
+</html>

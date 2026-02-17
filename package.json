@@ -1,0 +1,23 @@
+{
+  "name": "statutory-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "body-parser": "^2.2.2",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "mssql": "^12.2.0",
+    "multer": "^2.0.2",
+    "mysql2": "^3.17.2",
+    "nodemailer": "^8.0.1"
+  }
+}

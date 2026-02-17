@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>S&E Compliance Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; margin: 0; padding: 0; }
+    .dashboard-container { background: white; min-height: 100vh; box-shadow: 0 0 30px rgba(0,0,0,0.08); }
+    .content-wrapper { padding: 16px 40px 32px; }
+    h2 { color: #1a1a1a; font-size: 26px; font-weight: 600; margin-bottom: 8px; text-align: center; }
+    .form-label { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+    .form-select { border-radius: 10px; padding: 12px 16px; height: 48px; }
+    table { width: 100%; margin-top: 8px; }
+    th { background: #198754; color: white; padding: 14px; }
+    td { padding: 14px; border-bottom: 1px solid #e9ecef; }
+    .logout-btn { position: absolute; top: 16px; right: 25px; background: #dc3545; color: white; padding: 8px 18px; border-radius: 10px; }
+    .filter-row { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <div class="dashboard-container">
+    <button class="logout-btn" onclick="logout()">Logout</button>
+    <div class="content-wrapper">
+      <h2>S&E Statutory Compliance Dashboard</h2>
+
+      <div class="filter-row d-flex align-items-end" style="gap:20px;">
+        <div style="flex:1;">
+          <label class="form-label">State</label>
+          <select id="state" class="form-select" onchange="loadLocations()">
+            <option value="">-- All States --</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <label class="form-label">Location</label>
+          <select id="location" class="form-select" onchange="filterTable()">
+            <option value="">-- All Locations --</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table" id="dataTable">
+          <thead>
+            <tr>
+              <th>Entity</th>
+              <th>State</th>
+              <th>Location</th>
+              <th>Status</th>
+              <th>Certificate</th>
+              <th>Address</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let tableData = [];
+
+    async function loadData() {
+      try {
+        console.log("Fetching data from /data...");
+        const res = await fetch('/data');
+        console.log("Response status:", res.status);
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(`Server error ${res.status}: ${text.substring(0, 100)}`);
+        }
+
+        const data = await res.json();
+        console.log("Data received (first row):", data[0] || "empty");
+        console.log("Total rows:", data.length);
+
+        tableData = data;
+        renderTable(data);
+      } catch (err) {
+        console.error("Load error:", err);
+        alert("Cannot load data: " + err.message + "\nCheck console (F12) → Console tab");
+      }
+    }
+
+    async function loadStates() {
+      try {
+        const res = await fetch('/states');
+        const states = await res.json();
+        states.sort((a, b) => a.state.localeCompare(b.state));
+        const select = document.getElementById('state');
+        select.innerHTML = '<option value="">-- All States --</option>';
+        states.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.state;
+          opt.textContent = s.state;
+          select.appendChild(opt);
+        });
+      } catch (err) {
+        console.error("States load error:", err);
+      }
+    }
+
+    async function loadLocations() {
+      const state = document.getElementById('state').value;
+      document.getElementById('location').innerHTML = '<option value="">-- All Locations --</option>';
+      if (!state) return renderTable(tableData);
+
+      try {
+        const res = await fetch(`/locations/${encodeURIComponent(state)}`);
+        const locs = await res.json();
+        locs.sort((a, b) => a.location_name.localeCompare(b.location_name));
+        const select = document.getElementById('location');
+        locs.forEach(l => {
+          const opt = document.createElement('option');
+          opt.value = l.location_name;
+          opt.textContent = l.location_name;
+          select.appendChild(opt);
+        });
+        filterTable();
+      } catch (err) {
+        console.error("Locations load error:", err);
+      }
+    }
+
+    function renderTable(data) {
+      const tbody = document.querySelector('#dataTable tbody');
+      tbody.innerHTML = '';
+
+      if (!data || data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4">No data available</td></tr>';
+        return;
+      }
+
+      data.forEach(row => {
+        let certHtml = 'No Certificate';
+        if (row.certificate_link && row.certificate_link.trim()) {
+          // Single link case (your DB has string, not array)
+          certHtml = `<a href="${row.certificate_link}" target="_blank" class="btn btn-sm btn-primary">View Certificate</a>`;
+        }
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${row.entity || '-'}</td>
+          <td>${row.state || '-'}</td>
+          <td>${row.location_name || '-'}</td>
+          <td>${row.status || '-'}</td>
+          <td>${certHtml}</td>
+          <td>${row.address || '-'}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function filterTable() {
+      const state = document.getElementById('state').value;
+      const loc = document.getElementById('location').value;
+      let filtered = tableData;
+      if (state) filtered = filtered.filter(r => r.state === state);
+      if (loc) filtered = filtered.filter(r => r.location_name === loc);
+      renderTable(filtered);
+    }
+
+    function logout() {
+      fetch('/logout').then(() => window.location.href = '/');
+    }
+
+    window.onload = () => {
+      loadStates();
+      loadData();
+    };
+  </script>
+</body>
+</html>
