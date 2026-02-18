@@ -10,7 +10,9 @@ const upload = multer({ dest: 'uploads/' });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
+
+// Since HTML files are in root folder
+app.use(express.static(__dirname));
 
 app.use(session({
   secret: 'your-secret-key',
@@ -22,19 +24,19 @@ app.use(session({
 // MySQL Connection
 // ==========================
 const db = mysql.createConnection({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'codeforinterview',
-  database: process.env.DB_NAME || 'statutory_db',
-  port: process.env.DB_PORT || 3306
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  port: process.env.DB_PORT
 });
 
 db.connect(err => {
   if (err) {
     console.error('MySQL connection failed:', err.message);
-    console.error('Server will continue running without DB connection');
+  } else {
+    console.log('MySQL Connected successfully');
   }
-  console.log('MySQL Connected successfully');
 });
 
 // ==========================
@@ -49,23 +51,26 @@ const transporter = nodemailer.createTransport({
 });
 
 // ==========================
-// Routes
+// ROUTES
 // ==========================
 
-app.get('/', (req, res) =>
-  res.sendFile(path.join(__dirname, 'index.html'))
-);
+// Home
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
-app.get('/main', (req, res) =>
-  res.sendFile(path.join(__dirname, 'main.html'))
-);
+// Main Dashboard
+app.get('/main', (req, res) => {
+  res.sendFile(path.join(__dirname, 'main.html'));
+});
 
-app.get('/admin', (req, res) =>
-  res.sendFile(path.join(__dirname, 'admin.html'))
-);
+// Admin Dashboard
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
 
 // ==========================
-// Send OTP
+// SEND OTP
 // ==========================
 app.post('/send-code', (req, res) => {
   const { email } = req.body;
@@ -75,24 +80,24 @@ app.post('/send-code', (req, res) => {
     from: process.env.GMAIL_USER,
     to: email,
     subject: 'Your OTP Code',
-    text: `Your OTP code is ${otp}`   // ✅ FIXED
+    text: `Your OTP code is ${otp}`
   };
 
   transporter.sendMail(mailOptions, (error, info) => {
     if (error) {
-      console.error('Email error:', error);
+      console.error(error);
       return res.send("Failed to send OTP");
     }
 
     req.session.otp = otp;
     req.session.email = email;
 
-    res.send("OTP sent to email successfully");
+    res.send("OTP sent successfully");
   });
 });
 
 // ==========================
-// Login
+// LOGIN
 // ==========================
 app.post('/login', (req, res) => {
   const { email, password } = req.body;
@@ -104,9 +109,7 @@ app.post('/login', (req, res) => {
       return res.send("Database error");
     }
 
-    // ======================
-    // If user exists in DB
-    // ======================
+    // If admin/user exists in DB
     if (results.length > 0) {
       const user = results[0];
 
@@ -117,7 +120,6 @@ app.post('/login', (req, res) => {
           role: user.role
         };
 
-        // 🔥 Redirect based on role
         if (user.role === 'admin') {
           return res.redirect('/admin');
         } else {
@@ -129,9 +131,7 @@ app.post('/login', (req, res) => {
       }
     }
 
-    // ======================
-    // OTP Login (If user not in DB)
-    // ======================
+    // OTP login
     if (req.session.email === email && req.session.otp === password) {
 
       req.session.user = {
@@ -147,7 +147,37 @@ app.post('/login', (req, res) => {
 });
 
 // ==========================
-// Server Start (Railway Fix)
+// GET S&E DATA (IMPORTANT FIX)
+// ==========================
+app.get('/data', (req, res) => {
+
+  const { state, location } = req.query;
+
+  let query = 'SELECT * FROM se_data WHERE 1=1';
+  let params = [];
+
+  if (state && state !== '-- All States --') {
+    query += ' AND state = ?';
+    params.push(state);
+  }
+
+  if (location && location !== '-- All Locations --') {
+    query += ' AND location = ?';
+    params.push(location);
+  }
+
+  db.query(query, params, (err, results) => {
+    if (err) {
+      console.error('Error fetching data:', err);
+      return res.status(500).json({ error: 'Database error' });
+    }
+
+    res.json(results);
+  });
+});
+
+// ==========================
+// START SERVER (Railway)
 // ==========================
 const PORT = process.env.PORT || 3000;
 
