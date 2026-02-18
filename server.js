@@ -56,7 +56,7 @@ app.post('/send-code', (req, res) => {
     from: process.env.GMAIL_USER,
     to: email,
     subject: 'Your OTP Code',
-    text: Your OTP code is ${otp}
+    text: 'Your OTP code is ${otp}'
   };
 
   transporter.sendMail(mailOptions, (error, info) => {
