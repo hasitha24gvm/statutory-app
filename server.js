@@ -32,7 +32,7 @@ const db = mysql.createConnection({
 db.connect(err => {
   if (err) {
     console.error('MySQL connection failed:', err.message);
-    process.exit(1);
+    console.error('Server will continue running without DB connection');
   }
   console.log('MySQL Connected successfully');
 });
