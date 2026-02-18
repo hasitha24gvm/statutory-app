@@ -42,7 +42,8 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Routes
+// Routes...
+
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/main', (req, res) => res.sendFile(path.join(__dirname, 'main.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
@@ -54,22 +55,19 @@ app.post('/send-code', (req, res) => {
   const mailOptions = {
     from: process.env.GMAIL_USER,
     to: email,
-    subject: 'Your OTP Code - Statutory App',
-    text: `Dear User,\n\nYour OTP code is: ${otp}\n\nThis code is valid for 5 minutes.\n\nDo not share this code.`
+    subject: 'Your OTP Code',
+    text: Your OTP code is ${otp}
   };
 
   transporter.sendMail(mailOptions, (error, info) => {
     if (error) {
-      console.error('Email send error:', error);
-      return res.json({ error: 'Failed to send OTP. Please try again.' });
+      console.error('Email error:', error);
+      res.json({ error: 'Failed to send OTP' });
+    } else {
+      req.session.otp = otp;
+      req.session.email = email;
+      res.json({ success: 'OTP sent to email' });
     }
-
-    // Store OTP in session (NOT in DB)
-    req.session.otp = otp;
-    req.session.email = email;
-    console.log(`OTP sent successfully to ${email}: ${otp}`);
-
-    res.json({ success: 'OTP sent to your email!' });
   });
 });
 
@@ -77,36 +75,26 @@ app.post('/login', (req, res) => {
   const { email, password } = req.body;
 
   db.query('SELECT * FROM users WHERE email = ?', [email], (err, results) => {
-    if (err) {
-      console.error('DB error:', err);
-      return res.json({ error: 'Database error' });
-    }
-
+    if (err) return res.json({ error: 'Database error' });
     if (results.length > 0) {
       const user = results[0];
       if (user.password === password) {
         req.session.user = { email, role: user.role };
-        return res.json({ success: 'Logged in as ' + user.role, redirect: user.role === 'admin' ? '/admin' : '/main' });
+        res.json({ success: 'Logged in' });
       } else {
-        return res.json({ error: 'Invalid password' });
+        res.json({ error: 'Invalid credentials' });
+      }
+    } else {
+      if (req.session.email === email && req.session.otp === password) {
+        req.session.user = { email, role: 'user' };
+        res.json({ success: 'Logged in as user' });
+      } else {
+        res.json({ error: 'Invalid OTP or email' });
       }
     }
-
-    // User login with OTP
-    if (req.session.email === email && req.session.otp === password) {
-      req.session.user = { email, role: 'user' };
-      return res.json({ success: 'Logged in as user', redirect: '/main' });
-    }
-
-    res.json({ error: 'Invalid credentials or OTP' });
   });
 });
 
-// All other routes (data, add-row, edit-row, delete-row, states, locations, upload, etc.) 
-// MUST remain exactly as they are in your file.
-// Do NOT delete or change them.
+// Other routes remain the same ( /data, /add-row, etc. )...
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(3000, () => console.log('Server running on http://localhost:3000'));
