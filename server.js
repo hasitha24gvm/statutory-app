@@ -42,8 +42,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-// Routes...
-
+// Routes
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/main', (req, res) => res.sendFile(path.join(__dirname, 'main.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
@@ -66,6 +65,7 @@ app.post('/send-code', (req, res) => {
     } else {
       req.session.otp = otp;
       req.session.email = email;
+      req.session.role = 'user'; // Set role for users
       res.json({ success: 'OTP sent to email' });
     }
   });
@@ -78,23 +78,24 @@ app.post('/login', (req, res) => {
     if (err) return res.json({ error: 'Database error' });
     if (results.length > 0) {
       const user = results[0];
-      if (user.password === password) {
+      if (user.password === password && user.role === 'admin') {
         req.session.user = { email, role: user.role };
-        res.json({ success: 'Logged in' });
+        res.json({ success: 'Logged in as admin' });
       } else {
-        res.json({ error: 'Invalid credentials' });
+        res.json({ error: 'Invalid admin credentials' });
       }
     } else {
+      // For users: Check OTP from session
       if (req.session.email === email && req.session.otp === password) {
         req.session.user = { email, role: 'user' };
         res.json({ success: 'Logged in as user' });
       } else {
-        res.json({ error: 'Invalid OTP or email' });
+        res.json({ error: 'Invalid OTP' });
       }
     }
   });
 });
 
-// Other routes remain the same ( /data, /add-row, etc. )...
+// Other routes ( /data, /add-row, /edit-row, /delete-row, /states, /locations ) remain the same as in your original code...
 
 app.listen(3000, () => console.log('Server running on http://localhost:3000'));
