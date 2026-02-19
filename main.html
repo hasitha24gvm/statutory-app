@@ -86,9 +86,31 @@ function renderTable(data) {
   tbody.innerHTML = '';
 
   data.forEach(row => {
-    const cert = row.certificate_link
-      ? `<a href="${row.certificate_link}" target="_blank">View</a>`
-      : '-';
+    let certs = [];
+if (row.certificate_link) {
+  try {
+    certs = JSON.parse(row.certificate_link);
+  } catch {
+    certs = [row.certificate_link];
+  }
+}
+
+let cert = '-';
+if (certs.length > 0) {
+  cert = `
+  <div class="dropdown">
+    <button class="btn btn-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+      ${certs.length} Certificates
+    </button>
+    <ul class="dropdown-menu">
+      ${certs.map((c,i)=>`
+        <li><a class="dropdown-item" href="${c}" target="_blank">
+          View ${i===certs.length-1?'(Latest)':''}
+        </a></li>`).join('')}
+    </ul>
+  </div>`;
+}
+
 
     tbody.innerHTML += `
       <tr>
@@ -126,3 +148,4 @@ window.onload = () => {
 
 </body>
 </html>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
