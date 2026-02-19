@@ -24,7 +24,7 @@ app.use(session({
 const db = mysql.createConnection({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
+  password: process.env.DB_PASSWORD || 'codeforinterview',
   database: process.env.DB_NAME || 'statutory_db',
   port: process.env.DB_PORT || 3306
 });
@@ -42,8 +42,8 @@ db.connect(err => {
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS
+    user: process.env.GMAIL_USER || 'venkata.meherhasitha@gmail.com',
+    pass: process.env.GMAIL_PASS || 'vwwa voeb zhtw yivv'
   }
 });
 
