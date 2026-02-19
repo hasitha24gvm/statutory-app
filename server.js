@@ -230,18 +230,32 @@ app.post('/login', (req, res) => {
       if (err) return res.json({ error: 'Database error' });
 
       if (results.length > 0) {
+
         const user = results[0];
 
-        if (user.password === password) {
-          req.session.user = { email, role: user.role };
-          res.json({ success: true, role: user.role });
-        } else {
-          res.json({ error: 'Invalid credentials' });
+        // 🔵 ADMIN LOGIN (password based)
+        if (user.role === 'admin') {
+          if (user.password === password) {
+            req.session.user = { email, role: 'admin' };
+            return res.json({ success: true, role: 'admin' });
+          } else {
+            return res.json({ error: 'Invalid admin password' });
+          }
         }
 
-      } else {
-        res.json({ error: 'User not found' });
+        // 🟢 USER LOGIN (OTP based)
+        if (user.role === 'user') {
+          if (req.session.email === email && req.session.otp === password) {
+            req.session.user = { email, role: 'user' };
+            return res.json({ success: true, role: 'user' });
+          } else {
+            return res.json({ error: 'Invalid OTP' });
+          }
+        }
       }
+
+      return res.json({ error: 'User not found' });
+
     }
   );
 });
@@ -276,6 +290,7 @@ app.post('/send-code', (req, res) => {
 
     req.session.otp = otp;
     req.session.email = email;
+
     res.json({ success: true });
   });
 });
