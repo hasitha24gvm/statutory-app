@@ -1,9 +1,11 @@
+require('dotenv').config();
 const express = require('express');
 const mysql = require('mysql2');
 const multer = require('multer');
 const session = require('express-session');
 const nodemailer = require('nodemailer');
 const path = require('path');
+
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
@@ -35,6 +37,42 @@ db.connect(err => {
     process.exit(1);
   }
   console.log('MySQL Connected successfully');
+
+  // ======= initialise schema =======
+  // this will run every time the app starts; it makes sure the
+  // tables exist and seeds an admin user. on Railway free tier the
+  // database is ephemeral, so restarting the container wipes data.
+  // re-creating the tables prevents the "Database error" popup.
+  const initSql = `
+    CREATE TABLE IF NOT EXISTS users (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      email VARCHAR(255) UNIQUE,
+      password VARCHAR(255),
+      role ENUM('admin','user') NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS se_data (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      entity VARCHAR(255),
+      state VARCHAR(255),
+      location_name VARCHAR(255),
+      status VARCHAR(255),
+      certificate_link TEXT,
+      address TEXT,
+      remarks TEXT
+    );
+
+    INSERT IGNORE INTO users (email,password,role)
+      VALUES ('admin@gmail.com','adminpass','admin');
+  `;
+
+  db.query(initSql, initErr => {
+    if (initErr) {
+      console.error('initialisation query failed', initErr);
+    } else {
+      console.log('database initialised (tables created/seeded)');
+    }
+  });
 });
 
 /* ================= MAIL CONFIG ================= */
