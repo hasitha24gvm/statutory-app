@@ -23,12 +23,15 @@ app.use(session({
 
 /* ================= MYSQL CONNECTION ================= */
 
+// connection configuration reads from Railway's provided MYSQL* variables if
+// available. otherwise fall back to our own DB_* names (used locally) or hard
+// coded defaults for development.
 const db = mysql.createConnection({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'codeforinterview',
-  database: process.env.DB_NAME || 'statutory_db',
-  port: process.env.DB_PORT || 3306
+  host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
+  user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
+  password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || 'codeforinterview',
+  database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'statutory_db',
+  port: process.env.MYSQLPORT || process.env.DB_PORT || 3306
 });
 
 db.connect(err => {
@@ -81,7 +84,7 @@ const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.GMAIL_USER || 'venkata.meherhasitha@gmail.com',
-    pass: process.env.GMAIL_PASS || 'vwwa voeb zhtw yivv'
+    pass: process.env.GMAIL_PASS || 'gxcehzmgchylyzgo'
   }
 });
 
@@ -320,13 +323,13 @@ app.post('/send-code', (req, res) => {
     text: `Your OTP code is ${otp}`
   };
 
-  transporter.sendMail(mailOptions, (error) => {
-    if (error) {
-      console.error(error);
-      return res.json({ error: 'Failed to send OTP' });
-    }
-
-    req.session.otp = otp;
+  transporter.sendMail(mailOptions, (error, info) => {
+  if (error) {
+    console.error('OTP send failed', error);
+    return res.json({ error: 'Failed to send OTP' });
+  }
+  console.log('OTP sent to', email, 'info:', info.response);
+  req.session.otp = otp;
     req.session.email = email;
 
     res.json({ success: true });

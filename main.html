@@ -104,9 +104,14 @@ if (certs.length > 0) {
     </button>
     <ul class="dropdown-menu">
       ${certs.map((c,i)=>`
-        <li><a class="dropdown-item" href="${c}" target="_blank">
-          View ${i===certs.length-1?'(Latest)':''}
-        </a></li>`).join('')}
+        <li>
+          <a class="dropdown-item" href="${c}" target="_blank">
+            View ${i===certs.length-1?'(Latest)':''}
+          </a>
+          <a class="dropdown-item" href="${c}" download>
+            Download
+          </a>
+        </li>`).join('')}
     </ul>
   </div>`;
 }
