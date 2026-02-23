@@ -31,7 +31,8 @@ const db = mysql.createConnection({
   user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
   password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || 'codeforinterview',
   database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'statutory_db',
-  port: process.env.MYSQLPORT || process.env.DB_PORT || 3306
+  port: process.env.MYSQLPORT || process.env.DB_PORT || 3306,
+  multipleStatements: true          // <<< allow our initSql string
 });
 
 db.connect(err => {
@@ -80,13 +81,19 @@ db.connect(err => {
 
 /* ================= MAIL CONFIG ================= */
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER || 'venkata.meherhasitha@gmail.com',
-    pass: process.env.GMAIL_PASS || 'gxcehzmgchylyzgo'
-  }
-});
+// use SendGrid Web API instead of SMTP to avoid SMTP blocking on hosts
+const sgMail = require('@sendgrid/mail');
+sgMail.setApiKey(process.env.MAIL_PASS);
+
+async function sendOtpMail(to, subject, text) {
+  const msg = {
+    to,
+    from: process.env.MAIL_FROM || 'you@yourdomain.com',
+    subject,
+    text
+  };
+  return sgMail.send(msg);
+}
 
 /* ================= ROUTES ================= */
 
@@ -316,24 +323,20 @@ app.post('/send-code', (req, res) => {
   const { email } = req.body;
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-  const mailOptions = {
-    from: process.env.GMAIL_USER,
-    to: email,
-    subject: 'Your OTP Code',
-    text: `Your OTP code is ${otp}`
-  };
+  const subject = 'Your OTP Code';
+  const text = `Your OTP code is ${otp}`;
 
-  transporter.sendMail(mailOptions, (error, info) => {
-  if (error) {
-    console.error('OTP send failed', error);
-    return res.json({ error: 'Failed to send OTP' });
-  }
-  console.log('OTP sent to', email, 'info:', info.response);
-  req.session.otp = otp;
-    req.session.email = email;
-
-    res.json({ success: true });
-  });
+  sendOtpMail(email, subject, text)
+    .then(() => {
+      console.log('OTP sent to', email);
+      req.session.otp = otp;
+      req.session.email = email;
+      res.json({ success: true });
+    })
+    .catch(error => {
+      console.error('OTP send failed', error);
+      res.json({ error: 'Failed to send OTP' });
+    });
 });
 
 /* ================= SERVER ================= */
