@@ -88,7 +88,7 @@ sgMail.setApiKey(process.env.MAIL_PASS);
 async function sendOtpMail(to, subject, text) {
   const msg = {
     to,
-    from: process.env.MAIL_FROM || 'you@yourdomain.com',
+    from: process.env.MAIL_FROM || 'venkata.meherhasitha@gmail.com',
     subject,
     text
   };
