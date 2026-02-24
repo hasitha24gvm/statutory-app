@@ -6,7 +6,6 @@ const session = require('express-session');
 const nodemailer = require('nodemailer');
 const path = require('path');
 
-
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
@@ -22,17 +21,13 @@ app.use(session({
 }));
 
 /* ================= MYSQL CONNECTION ================= */
-
-// connection configuration reads from Railway's provided MYSQL* variables if
-// available. otherwise fall back to our own DB_* names (used locally) or hard
-// coded defaults for development.
 const db = mysql.createConnection({
   host: process.env.MYSQLHOST || process.env.DB_HOST || 'localhost',
   user: process.env.MYSQLUSER || process.env.DB_USER || 'root',
   password: process.env.MYSQLPASSWORD || process.env.DB_PASSWORD || 'codeforinterview',
   database: process.env.MYSQLDATABASE || process.env.DB_NAME || 'statutory_db',
   port: process.env.MYSQLPORT || process.env.DB_PORT || 3306,
-  multipleStatements: true          // <<< allow our initSql string
+  multipleStatements: true
 });
 
 db.connect(err => {
@@ -42,11 +37,6 @@ db.connect(err => {
   }
   console.log('MySQL Connected successfully');
 
-  // ======= initialise schema =======
-  // this will run every time the app starts; it makes sure the
-  // tables exist and seeds an admin user. on Railway free tier the
-  // database is ephemeral, so restarting the container wipes data.
-  // re-creating the tables prevents the "Database error" popup.
   const initSql = `
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -80,8 +70,6 @@ db.connect(err => {
 });
 
 /* ================= MAIL CONFIG ================= */
-
-// use SendGrid Web API instead of SMTP to avoid SMTP blocking on hosts
 const sgMail = require('@sendgrid/mail');
 sgMail.setApiKey(process.env.MAIL_PASS);
 
@@ -96,34 +84,20 @@ async function sendOtpMail(to, subject, text) {
 }
 
 /* ================= ROUTES ================= */
-
-app.get('/', (req, res) =>
-  res.sendFile(path.join(__dirname, 'index.html'))
-);
-
-app.get('/main', (req, res) =>
-  res.sendFile(path.join(__dirname, 'main.html'))
-);
-
-app.get('/admin', (req, res) =>
-  res.sendFile(path.join(__dirname, 'admin.html'))
-);
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/main', (req, res) => res.sendFile(path.join(__dirname, 'main.html')));
+app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 
 /* ================= FILTER ROUTES ================= */
-
 app.get('/states', (req, res) => {
-  db.query(
-    'SELECT DISTINCT state FROM se_data ORDER BY state ASC',
-    (err, results) => {
-      if (err) return res.status(500).json({ error: 'Database error' });
-      res.json(results);
-    }
-  );
+  db.query('SELECT DISTINCT state FROM se_data ORDER BY state ASC', (err, results) => {
+    if (err) return res.status(500).json({ error: 'Database error' });
+    res.json(results);
+  });
 });
 
 app.get('/locations/:state', (req, res) => {
-  db.query(
-    'SELECT DISTINCT location_name FROM se_data WHERE state = ? ORDER BY location_name ASC',
+  db.query('SELECT DISTINCT location_name FROM se_data WHERE state = ? ORDER BY location_name ASC',
     [req.params.state],
     (err, results) => {
       if (err) return res.status(500).json({ error: 'Database error' });
@@ -133,27 +107,16 @@ app.get('/locations/:state', (req, res) => {
 });
 
 app.get('/data', (req, res) => {
-
   const { state, location } = req.query;
-
   let query = 'SELECT * FROM se_data WHERE 1=1';
   let params = [];
-
-  if (state) {
-    query += ' AND state = ?';
-    params.push(state);
-  }
-
-  if (location) {
-    query += ' AND location_name = ?';
-    params.push(location);
-  }
-
+  if (state) { query += ' AND state = ?'; params.push(state); }
+  if (location) { query += ' AND location_name = ?'; params.push(location); }
   query += ' ORDER BY state ASC, location_name ASC';
 
   db.query(query, params, (err, results) => {
     if (err) {
-      console.error(err);
+      console.error('Data fetch error:', err);
       return res.status(500).json({ error: 'Database error' });
     }
     res.json(results);
@@ -161,13 +124,10 @@ app.get('/data', (req, res) => {
 });
 
 /* ================= ADD ROW ================= */
-
 app.post('/add-row', upload.single('certificate'), (req, res) => {
-
   const { entity, state, location_name, status, address, remarks } = req.body;
 
   let certificateLinks = [];
-
   if (req.file) {
     certificateLinks.push(`/uploads/${req.file.filename}`);
   }
@@ -180,26 +140,19 @@ app.post('/add-row', upload.single('certificate'), (req, res) => {
 
   db.query(
     query,
-    [
-      entity,
-      state,
-      location_name,
-      status,
-      JSON.stringify(certificateLinks),
-      address,
-      remarks
-    ],
+    [entity, state, location_name, status, JSON.stringify(certificateLinks || []), address, remarks],
     err => {
-      if (err) return res.status(500).json({ error: 'Insert failed' });
+      if (err) {
+        console.error('Add row error:', err); // ← Logs exact error
+        return res.status(500).json({ error: 'Insert failed: ' + err.message });
+      }
       res.json({ success: true });
     }
   );
 });
 
 /* ================= EDIT ROW ================= */
-
 app.post('/edit-row/:id', upload.single('certificate'), (req, res) => {
-
   const id = req.params.id;
   const { entity, state, location_name, status, address, remarks } = req.body;
 
@@ -207,11 +160,13 @@ app.post('/edit-row/:id', upload.single('certificate'), (req, res) => {
     'SELECT certificate_link FROM se_data WHERE id = ?',
     [id],
     (err, results) => {
-
-      if (err) return res.status(500).json({ error: 'Fetch failed' });
+      if (err) {
+        console.error('Edit fetch error:', err);
+        return res.status(500).json({ error: 'Fetch failed: ' + err.message });
+      }
 
       let certs = [];
-      if (results[0].certificate_link) {
+      if (results[0]?.certificate_link) {
         try {
           certs = JSON.parse(results[0].certificate_link);
         } catch {
@@ -232,18 +187,12 @@ app.post('/edit-row/:id', upload.single('certificate'), (req, res) => {
 
       db.query(
         updateQuery,
-        [
-          entity,
-          state,
-          location_name,
-          status,
-          JSON.stringify(certs),
-          address,
-          remarks,
-          id
-        ],
+        [entity, state, location_name, status, JSON.stringify(certs || []), address, remarks, id],
         err2 => {
-          if (err2) return res.status(500).json({ error: 'Update failed' });
+          if (err2) {
+            console.error('Edit update error:', err2);
+            return res.status(500).json({ error: 'Update failed: ' + err2.message });
+          }
           res.json({ success: true });
         }
       );
@@ -252,74 +201,58 @@ app.post('/edit-row/:id', upload.single('certificate'), (req, res) => {
 });
 
 /* ================= DELETE ================= */
-
 app.post('/delete-row/:id', (req, res) => {
-  db.query(
-    'DELETE FROM se_data WHERE id = ?',
-    [req.params.id],
-    err => {
-      if (err) return res.status(500).json({ error: 'Delete failed' });
-      res.json({ success: true });
+  db.query('DELETE FROM se_data WHERE id = ?', [req.params.id], err => {
+    if (err) {
+      console.error('Delete error:', err);
+      return res.status(500).json({ error: 'Delete failed: ' + err.message });
     }
-  );
-});
-
-/* ================= LOGIN ================= */
-
-app.post('/login', (req, res) => {
-
-  const { email, password } = req.body;
-
-  db.query(
-    'SELECT * FROM users WHERE email = ?',
-    [email],
-    (err, results) => {
-
-      if (err) return res.json({ error: 'Database error' });
-
-      if (results.length > 0) {
-
-        const user = results[0];
-
-        // 🔵 ADMIN LOGIN (password based)
-        if (user.role === 'admin') {
-          if (user.password === password) {
-            req.session.user = { email, role: 'admin' };
-            return res.json({ success: true, role: 'admin' });
-          } else {
-            return res.json({ error: 'Invalid admin password' });
-          }
-        }
-
-        // 🟢 USER LOGIN (OTP based)
-        if (user.role === 'user') {
-          if (req.session.email === email && req.session.otp === password) {
-            req.session.user = { email, role: 'user' };
-            return res.json({ success: true, role: 'user' });
-          } else {
-            return res.json({ error: 'Invalid OTP' });
-          }
-        }
-      }
-
-      return res.json({ error: 'User not found' });
-
-    }
-  );
-});
-
-/* ================= LOGOUT ================= */
-
-app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
     res.json({ success: true });
   });
 });
 
+/* ================= LOGIN ================= */
+app.post('/login', (req, res) => {
+  const { email, password } = req.body;
+
+  db.query('SELECT * FROM users WHERE email = ?', [email], (err, results) => {
+    if (err) {
+      console.error('Login DB error:', err);
+      return res.json({ error: 'Database error' });
+    }
+
+    if (results.length > 0) {
+      const user = results[0];
+      if (user.role === 'admin') {
+        if (user.password === password) {
+          req.session.user = { email, role: 'admin' };
+          return res.json({ success: true, role: 'admin' });
+        } else {
+          return res.json({ error: 'Invalid admin password' });
+        }
+      }
+
+      if (user.role === 'user') {
+        if (req.session.email === email && req.session.otp === password) {
+          req.session.user = { email, role: 'user' };
+          return res.json({ success: true, role: 'user' });
+        } else {
+          return res.json({ error: 'Invalid OTP' });
+        }
+      }
+    }
+
+    return res.json({ error: 'User not found' });
+  });
+});
+
+/* ================= LOGOUT ================= */
+app.get('/logout', (req, res) => {
+  req.session.destroy(() => res.json({ success: true }));
+});
+
 /* ================= OTP ================= */
-
 app.post('/send-code', (req, res) => {
-
   const { email } = req.body;
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
@@ -340,9 +273,7 @@ app.post('/send-code', (req, res) => {
 });
 
 /* ================= SERVER ================= */
-
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
