@@ -37,6 +37,9 @@ db.connect(err => {
   }
   console.log('MySQL Connected successfully');
 
+  // COMMENTED OUT to prevent any table reset or data wipe on every startup
+  // Only uncomment if you need to create tables once (run manually in MySQL client)
+  /*
   const initSql = `
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -67,6 +70,7 @@ db.connect(err => {
       console.log('database initialised (tables created/seeded)');
     }
   });
+  */
 });
 
 /* ================= MAIL CONFIG ================= */
@@ -143,7 +147,7 @@ app.post('/add-row', upload.single('certificate'), (req, res) => {
     [entity, state, location_name, status, JSON.stringify(certificateLinks || []), address, remarks],
     err => {
       if (err) {
-        console.error('Add row error:', err); // ← Logs exact error
+        console.error('Add row error:', err);
         return res.status(500).json({ error: 'Insert failed: ' + err.message });
       }
       res.json({ success: true });
@@ -200,7 +204,7 @@ app.post('/edit-row/:id', upload.single('certificate'), (req, res) => {
   );
 });
 
-/* ================= DELETE ================= */
+/* ================= DELETE ROW ================= */
 app.post('/delete-row/:id', (req, res) => {
   db.query('DELETE FROM se_data WHERE id = ?', [req.params.id], err => {
     if (err) {
@@ -272,8 +276,7 @@ app.post('/send-code', (req, res) => {
     });
 });
 
-/* ================= SERVER ================= */
-const PORT = process.env.PORT || 3000;
+/* ================= UPDATE CERTIFICATE LINKS (for Drive links add/delete) ================= */
 app.post('/update-cert-links/:id', (req, res) => {
   const id = req.params.id;
   const { certificate_link } = req.body;
@@ -290,6 +293,9 @@ app.post('/update-cert-links/:id', (req, res) => {
     }
   );
 });
+
+/* ================= SERVER ================= */
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
