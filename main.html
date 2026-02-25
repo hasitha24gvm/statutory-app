@@ -3,14 +3,25 @@
 <head>
   <title>S&E Dashboard</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    // ─── STEP 1: PASTE YOUR SUPABASE VALUES HERE ───────────────────
+    const SUPABASE_URL = 'https://pgexcbjryrtkzbrertma.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_ukjwUCjlgu-OdW91Jd0iFQ_-GXY3Dup';
+    // ───────────────────────────────────────────────────────────────
+
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+  </script>
 </head>
 <body class="p-4">
 
 <h2 class="text-center">S&E Compliance Dashboard</h2>
 
+<!-- ── FILTER ROW ─────────────────────────────────────────── -->
 <div class="row mb-3">
   <div class="col">
-    <select id="state" class="form-select" onchange="loadLocations()">
+    <select id="state" class="form-select" onchange="onStateChange()">
       <option value="">-- All States --</option>
     </select>
   </div>
@@ -24,6 +35,7 @@
   </div>
 </div>
 
+<!-- ── DATA TABLE ─────────────────────────────────────────── -->
 <table class="table table-bordered" id="dataTable">
   <thead>
     <tr>
@@ -35,122 +47,171 @@
       <th>Address</th>
     </tr>
   </thead>
-  <tbody></tbody>
+  <tbody id="compliance-table-body">
+    <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
+  </tbody>
 </table>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-let tableData = [];
+  let tableData = []; // holds all rows fetched from Supabase
 
-async function loadData() {
-  const res = await fetch('/data');
-  const data = await res.json();
-  tableData = data;
-  renderTable(data);
-}
+  // ── 1. LOAD ALL DATA FROM SUPABASE ────────────────────────────
+  async function loadData() {
+    const { data, error } = await db
+      .from('se_compliance')
+      .select('*')
+      .order('id', { ascending: true });
 
-async function loadStates() {
-  const res = await fetch('/states');
-  const states = await res.json();
-  const select = document.getElementById('state');
-  states.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.state;
-    opt.textContent = s.state;
-    select.appendChild(opt);
-  });
-}
+    if (error) {
+      console.error('Error loading data:', error.message);
+      document.querySelector('#compliance-table-body').innerHTML =
+        '<tr><td colspan="6" class="text-center text-danger">Failed to load data. Check console.</td></tr>';
+      return;
+    }
 
-async function loadLocations() {
-  const state = document.getElementById('state').value;
-  document.getElementById('location').innerHTML =
-    '<option value="">-- All Locations --</option>';
-
-  if (!state) return renderTable(tableData);
-
-  const res = await fetch(`/locations/${encodeURIComponent(state)}`);
-  const locs = await res.json();
-
-  const select = document.getElementById('location');
-  locs.forEach(l => {
-    const opt = document.createElement('option');
-    opt.value = l.location_name;
-    opt.textContent = l.location_name;
-    select.appendChild(opt);
-  });
-
-  filterTable();
-}
-
-function renderTable(data) {
-  const tbody = document.querySelector('#dataTable tbody');
-  tbody.innerHTML = '';
-
-  data.forEach(row => {
-    let certs = [];
-if (row.certificate_link) {
-  try {
-    certs = JSON.parse(row.certificate_link);
-  } catch {
-    certs = [row.certificate_link];
+    tableData = data;
+    populateStateDropdown(data);
+    renderTable(data);
   }
-}
 
-let cert = '-';
-if (certs.length > 0) {
-  cert = `
-  <div class="dropdown">
-    <button class="btn btn-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
-      ${certs.length} Certificates
-    </button>
-    <ul class="dropdown-menu">
-      ${certs.map((c,i)=>`
-        <li>
-          <a class="dropdown-item" href="${c}" target="_blank">
-            View ${i===certs.length-1?'(Latest)':''}
-          </a>
-          <a class="dropdown-item" href="${c}" download>
-            Download
-          </a>
-        </li>`).join('')}
-    </ul>
-  </div>`;
-}
+  // ── 2. FILL STATE DROPDOWN FROM LOADED DATA ───────────────────
+  function populateStateDropdown(data) {
+    // Get unique states, sorted A-Z
+    const states = [...new Set(data.map(r => r.state).filter(Boolean))].sort();
+    const select = document.getElementById('state');
+    select.innerHTML = '<option value="">-- All States --</option>';
+    states.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      select.appendChild(opt);
+    });
+  }
 
+  // ── 3. WHEN STATE CHANGES — FILL LOCATION DROPDOWN ───────────
+  function onStateChange() {
+    const selectedState = document.getElementById('state').value;
 
-    tbody.innerHTML += `
-      <tr>
-        <td>${row.entity || '-'}</td>
-        <td>${row.state || '-'}</td>
-        <td>${row.location_name || '-'}</td>
-        <td>${row.status || '-'}</td>
-        <td>${cert}</td>
-        <td>${row.address || '-'}</td>
-      </tr>
-    `;
-  });
-}
+    // Reset location dropdown
+    const locSelect = document.getElementById('location');
+    locSelect.innerHTML = '<option value="">-- All Locations --</option>';
 
-function filterTable() {
-  const state = document.getElementById('state').value;
-  const loc = document.getElementById('location').value;
+    if (selectedState) {
+      // Filter locations that belong to selected state
+      const locations = [
+        ...new Set(
+          tableData
+            .filter(r => r.state === selectedState)
+            .map(r => r.location_name)
+            .filter(Boolean)
+        )
+      ].sort();
 
-  let filtered = tableData;
-  if (state) filtered = filtered.filter(r => r.state === state);
-  if (loc) filtered = filtered.filter(r => r.location_name === loc);
+      locations.forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l;
+        opt.textContent = l;
+        locSelect.appendChild(opt);
+      });
+    }
 
-  renderTable(filtered);
-}
+    filterTable(); // re-render table with state filter applied
+  }
 
-function logout() {
-  fetch('/logout').then(() => window.location.href = '/');
-}
+  // ── 4. FILTER TABLE BY STATE + LOCATION ───────────────────────
+  function filterTable() {
+    const state = document.getElementById('state').value;
+    const loc   = document.getElementById('location').value;
 
-window.onload = () => {
-  loadStates();
-  loadData();
-};
+    let filtered = tableData;
+    if (state) filtered = filtered.filter(r => r.state === state);
+    if (loc)   filtered = filtered.filter(r => r.location_name === loc);
+
+    renderTable(filtered);
+  }
+
+  // ── 5. RENDER TABLE ROWS ──────────────────────────────────────
+  function renderTable(data) {
+    const tbody = document.getElementById('compliance-table-body');
+
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No records found.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = data.map(row => {
+      // Handle certificate links (could be single URL or JSON array)
+      let certs = [];
+      if (row.certificate_link) {
+        try {
+          certs = JSON.parse(row.certificate_link); // if stored as JSON array
+        } catch {
+          certs = [row.certificate_link]; // treat as single URL
+        }
+      }
+
+      let certCell = '-';
+      if (certs.length > 0) {
+        certCell = `
+          <div class="dropdown">
+            <button class="btn btn-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+              ${certs.length} Certificate${certs.length > 1 ? 's' : ''}
+            </button>
+            <ul class="dropdown-menu">
+              ${certs.map((c, i) => `
+                <li>
+                  <a class="dropdown-item" href="${c}" target="_blank">
+                    View ${i === certs.length - 1 ? '(Latest)' : ''}
+                  </a>
+                </li>
+              `).join('')}
+            </ul>
+          </div>`;
+      }
+
+      // Color-code the status badge
+      const statusColors = {
+        'Received Certificate':           'success',
+        'Need to Apply for certificate':  'danger',
+        'Received Acknowledgment':        'warning',
+        'Not required till 10 manpower':  'secondary',
+        'Parking yard Change':            'info',
+      };
+      const badgeColor = statusColors[row.status] || 'secondary';
+      const statusBadge = `<span class="badge bg-${badgeColor}">${row.status || '-'}</span>`;
+
+      return `
+        <tr>
+          <td>${row.entity        || '-'}</td>
+          <td>${row.state         || '-'}</td>
+          <td>${row.location_name || '-'}</td>
+          <td>${statusBadge}</td>
+          <td>${certCell}</td>
+          <td>${row.address       || '-'}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  // ── 6. LOGOUT ─────────────────────────────────────────────────
+  function logout() {
+    // Clear session and go back to login page
+    sessionStorage.clear();
+    window.location.href = 'index.html';
+  }
+
+  // ── 7. INIT — CHECK LOGIN THEN LOAD DATA ──────────────────────
+  window.onload = function () {
+    // Optional: protect this page — redirect to login if not logged in
+    const userEmail = sessionStorage.getItem('user_email');
+    if (!userEmail) {
+      window.location.href = 'index.html';
+      return;
+    }
+    loadData();
+  };
 </script>
 
 </body>
 </html>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
