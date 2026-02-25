@@ -274,6 +274,22 @@ app.post('/send-code', (req, res) => {
 
 /* ================= SERVER ================= */
 const PORT = process.env.PORT || 3000;
+app.post('/update-cert-links/:id', (req, res) => {
+  const id = req.params.id;
+  const { certificate_link } = req.body;
+
+  db.query(
+    'UPDATE se_data SET certificate_link = ? WHERE id = ?',
+    [certificate_link, id],
+    err => {
+      if (err) {
+        console.error('Update cert links error:', err);
+        return res.status(500).json({ error: 'Failed to update links: ' + err.message });
+      }
+      res.json({ success: true });
+    }
+  );
+});
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
