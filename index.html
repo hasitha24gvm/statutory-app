@@ -5,6 +5,13 @@
   <title>Log In</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = 'https://pgexcbjryrtkzbrertma.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_ukjwUCjlgu-OdW91Jd0iFQ_-GXY3Dup';
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+  </script>
   <style>
     body {
       background: #f8f9fa;
@@ -58,6 +65,10 @@
       font-weight: 600;
       width: 100%;
     }
+    .btn-signin:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
     .btn-send-code {
       background: #0d6efd;
       color: white;
@@ -67,6 +78,10 @@
       font-size: 14px;
       width: 100%;
       margin-top: 8px;
+    }
+    .btn-send-code:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
     }
     .password-wrapper {
       position: relative;
@@ -80,6 +95,20 @@
       color: #6c757d;
       font-size: 1.2rem;
     }
+    .error-msg {
+      color: #dc3545;
+      font-size: 13px;
+      margin-top: 10px;
+      text-align: center;
+      display: none;
+    }
+    .success-msg {
+      color: #198754;
+      font-size: 13px;
+      margin-top: 10px;
+      text-align: center;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -88,14 +117,12 @@
   <h1>Log In</h1>
   <p class="subtitle">Welcome back! Please enter your details.</p>
 
-  <!-- REMOVE action & method -->
   <form id="loginForm">
     <div class="row g-3">
 
       <div class="col-md-7">
         <label class="form-label">Email</label>
-        <input type="email" id="email" class="form-control" required>
-
+        <input type="email" id="email" class="form-control" placeholder="you@company.com" required>
         <button type="button" id="sendCodeBtn" class="btn-send-code">
           Send Code to Email
         </button>
@@ -104,81 +131,164 @@
       <div class="col-md-5">
         <label class="form-label">Password / Code</label>
         <div class="password-wrapper">
-          <input type="password" id="password" class="form-control" required>
+          <input type="password" id="password" class="form-control" placeholder="Enter password" required>
           <i class="bi bi-eye-slash password-toggle" id="togglePassword"></i>
         </div>
       </div>
 
     </div>
 
-    <button type="submit" class="btn-signin mt-4">Sign In</button>
+    <!-- Error and success messages shown here instead of alert() -->
+    <p class="error-msg"   id="errorMsg"></p>
+    <p class="success-msg" id="successMsg"></p>
+
+    <button type="submit" class="btn-signin mt-4" id="signinBtn">Sign In</button>
   </form>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 
-  // LOGIN FIX
-  document.getElementById('loginForm').addEventListener('submit', async function(e) {
-    e.preventDefault(); // STOP normal form submit
+  // ── HELPERS ──────────────────────────────────────────────────
+  function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('successMsg').style.display = 'none';
+  }
 
-    const email = document.getElementById('email').value;
-    const password = document.getElementById('password').value;
+  function showSuccess(msg) {
+    const el = document.getElementById('successMsg');
+    el.textContent = msg;
+    el.style.display = 'block';
+    document.getElementById('errorMsg').style.display = 'none';
+  }
 
-    const res = await fetch('/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
+  function clearMessages() {
+    document.getElementById('errorMsg').style.display   = 'none';
+    document.getElementById('successMsg').style.display = 'none';
+  }
 
-    const data = await res.json();
+  // ── LOGIN ────────────────────────────────────────────────────
+  // Checks the email + password against your app_users table in Supabase
+  document.getElementById('loginForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    clearMessages();
 
-    if (data.success) {
-      if (data.role === 'admin') {
-        window.location.href = '/admin';
-      } else {
-        window.location.href = '/main';
+    const email    = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value.trim();
+    const btn      = document.getElementById('signinBtn');
+
+    btn.disabled    = true;
+    btn.textContent = 'Signing in...';
+
+    try {
+      // Query app_users table for matching active user
+      const { data, error } = await db
+        .from('app_users')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password)
+        .eq('active', true)
+        .single();
+
+      if (error || !data) {
+        showError('Invalid email or password. Please try again.');
+        return;
       }
-    } else {
-      alert(data.error);
+
+      // Save user info for the session (used by main.html and admin.html)
+      sessionStorage.setItem('user_email', data.email);
+      sessionStorage.setItem('user_role',  data.role);
+
+      // Redirect based on role
+      if (data.role === 'admin') {
+        window.location.href = 'admin.html';
+      } else {
+        window.location.href = 'main.html';
+      }
+
+    } catch (err) {
+      showError('Something went wrong. Please check your connection.');
+      console.error(err);
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = 'Sign In';
     }
   });
 
-  // SEND CODE FIX
+  // ── SEND OTP CODE ────────────────────────────────────────────
+  // Uses Supabase Auth built-in magic link / OTP — no server needed
+  // NOTE: For this to work, go to Supabase → Authentication → Email Templates
+  // and make sure "Magic Link" or "OTP" is enabled.
   document.getElementById('sendCodeBtn').addEventListener('click', async () => {
-    const email = document.getElementById('email').value;
+    clearMessages();
+
+    const email = document.getElementById('email').value.trim();
+    const btn   = document.getElementById('sendCodeBtn');
 
     if (!email) {
-      alert('Please enter your email first');
+      showError('Please enter your email address first.');
       return;
     }
 
-    const res = await fetch('/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email })
-    });
+    // Check if this email exists and is active in your app_users table
+    const { data: user } = await db
+      .from('app_users')
+      .select('email')
+      .eq('email', email)
+      .eq('active', true)
+      .single();
 
-    const data = await res.json();
+    if (!user) {
+      showError('This email is not registered. Contact your admin.');
+      return;
+    }
 
-    if (data.success) {
-      alert('OTP sent successfully /n please check your spam');
-    } else {
-      alert(data.error);
+    btn.disabled    = true;
+    btn.textContent = 'Sending...';
+
+    try {
+      // Send a one-time password (OTP) via Supabase Auth
+      const { error } = await db.auth.signInWithOtp({
+        email: email,
+        options: { shouldCreateUser: false } // only works for existing Supabase Auth users
+      });
+
+      if (error) {
+        // Fallback message — OTP requires Supabase Auth users to be set up separately
+        showError('OTP sending failed. Use your password to log in, or ask admin to enable OTP.');
+        console.error('OTP error:', error.message);
+      } else {
+        showSuccess('Code sent! Check your inbox (and spam folder).');
+      }
+
+    } catch (err) {
+      showError('Something went wrong while sending the code.');
+      console.error(err);
+    } finally {
+      btn.disabled    = false;
+      btn.textContent = 'Send Code to Email';
     }
   });
 
-  // PASSWORD TOGGLE
-  const togglePassword = document.getElementById('togglePassword');
-  const password = document.getElementById('password');
-
-  togglePassword.addEventListener('click', () => {
-    const type = password.type === 'password' ? 'text' : 'password';
-    password.type = type;
-    togglePassword.classList.toggle('bi-eye');
-    togglePassword.classList.toggle('bi-eye-slash');
+  // ── PASSWORD SHOW/HIDE TOGGLE ────────────────────────────────
+  document.getElementById('togglePassword').addEventListener('click', () => {
+    const input  = document.getElementById('password');
+    const icon   = document.getElementById('togglePassword');
+    const isHidden = input.type === 'password';
+    input.type   = isHidden ? 'text' : 'password';
+    icon.classList.toggle('bi-eye',      isHidden);
+    icon.classList.toggle('bi-eye-slash', !isHidden);
   });
 
-</script>
+  // ── AUTO REDIRECT IF ALREADY LOGGED IN ──────────────────────
+  window.onload = function () {
+    const role = sessionStorage.getItem('user_role');
+    if (role === 'admin')  { window.location.href = 'admin.html'; }
+    else if (role)         { window.location.href = 'main.html';  }
+  };
 
+</script>
 </body>
 </html>
