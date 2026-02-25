@@ -37,9 +37,6 @@ db.connect(err => {
   }
   console.log('MySQL Connected successfully');
 
-  // COMMENTED OUT to prevent any table reset or data wipe on every startup
-  // Only uncomment if you need to create tables once (run manually in MySQL client)
-  /*
   const initSql = `
     CREATE TABLE IF NOT EXISTS users (
       id INT AUTO_INCREMENT PRIMARY KEY,
@@ -70,7 +67,6 @@ db.connect(err => {
       console.log('database initialised (tables created/seeded)');
     }
   });
-  */
 });
 
 /* ================= MAIL CONFIG ================= */
@@ -147,7 +143,7 @@ app.post('/add-row', upload.single('certificate'), (req, res) => {
     [entity, state, location_name, status, JSON.stringify(certificateLinks || []), address, remarks],
     err => {
       if (err) {
-        console.error('Add row error:', err);
+        console.error('Add row error:', err); // ← Logs exact error
         return res.status(500).json({ error: 'Insert failed: ' + err.message });
       }
       res.json({ success: true });
@@ -204,7 +200,7 @@ app.post('/edit-row/:id', upload.single('certificate'), (req, res) => {
   );
 });
 
-/* ================= DELETE ROW ================= */
+/* ================= DELETE ================= */
 app.post('/delete-row/:id', (req, res) => {
   db.query('DELETE FROM se_data WHERE id = ?', [req.params.id], err => {
     if (err) {
@@ -274,24 +270,6 @@ app.post('/send-code', (req, res) => {
       console.error('OTP send failed', error);
       res.json({ error: 'Failed to send OTP' });
     });
-});
-
-/* ================= UPDATE CERTIFICATE LINKS (for Drive links add/delete) ================= */
-app.post('/update-cert-links/:id', (req, res) => {
-  const id = req.params.id;
-  const { certificate_link } = req.body;
-
-  db.query(
-    'UPDATE se_data SET certificate_link = ? WHERE id = ?',
-    [certificate_link, id],
-    err => {
-      if (err) {
-        console.error('Update cert links error:', err);
-        return res.status(500).json({ error: 'Failed to update links: ' + err.message });
-      }
-      res.json({ success: true });
-    }
-  );
 });
 
 /* ================= SERVER ================= */

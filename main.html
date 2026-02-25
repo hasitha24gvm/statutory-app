@@ -96,26 +96,24 @@ if (row.certificate_link) {
 }
 
 let cert = '-';
-if (row.certificate_link) {
-  const links = row.certificate_link.split(',').map(l => l.trim()).filter(l => l);
-  if (links.length > 0) {
-    cert = `
-      <div class="dropdown">
-        <button class="btn btn-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
-          ${links.length} Certificates
-        </button>
-        <ul class="dropdown-menu">
-          ${links.map((link, i) => `
-            <li>
-              <a class="dropdown-item" href="${link}" target="_blank">
-                View Certificate ${i + 1} ${i === links.length - 1 ? '(Latest)' : ''}
-              </a>
-              <a class="dropdown-item" href="${link}" download>Download</a>
-            </li>
-          `).join('')}
-        </ul>
-      </div>`;
-  }
+if (certs.length > 0) {
+  cert = `
+  <div class="dropdown">
+    <button class="btn btn-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+      ${certs.length} Certificates
+    </button>
+    <ul class="dropdown-menu">
+      ${certs.map((c,i)=>`
+        <li>
+          <a class="dropdown-item" href="${c}" target="_blank">
+            View ${i===certs.length-1?'(Latest)':''}
+          </a>
+          <a class="dropdown-item" href="${c}" download>
+            Download
+          </a>
+        </li>`).join('')}
+    </ul>
+  </div>`;
 }
 
 
