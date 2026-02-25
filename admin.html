@@ -1,286 +1,428 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Admin Dashboard</title>
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <title>Admin Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = 'https://pgexcbjryrtkzbrertma.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_ukjwUCjlgu-OdW91Jd0iFQ_-GXY3Dup';
+    const { createClient } = supabase;
+    const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+  </script>
 </head>
 
 <body class="p-4">
 
-<h3>Admin Dashboard</h3>
-<button onclick="logout()" class="btn btn-danger float-end">Logout</button>
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h3 class="mb-0">Admin Dashboard</h3>
+  <button onclick="logout()" class="btn btn-danger">Logout</button>
+</div>
 
+<!-- ── FILTERS + ADD BUTTON ──────────────────────────────── -->
 <div class="row mb-3">
   <div class="col">
     <label>State</label>
-    <select id="state" class="form-select" onchange="loadLocations()">
+    <select id="state" class="form-select" onchange="onStateChange()">
       <option value="">-- All States --</option>
     </select>
   </div>
-
   <div class="col">
     <label>Location</label>
     <select id="location" class="form-select" onchange="filterTable()">
       <option value="">-- All Locations --</option>
     </select>
   </div>
-
   <div class="col d-flex align-items-end">
     <button class="btn btn-primary w-100" onclick="addNewRow()">+ Add Row</button>
   </div>
 </div>
 
-<table class="table table-bordered" id="dataTable">
-<thead>
-<tr>
-<th>Entity</th>
-<th>State</th>
-<th>Location</th>
-<th>Status</th>
-<th>Certificates</th>
-<th>Address</th>
-<th>Remarks</th>
-<th>Actions</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
+<!-- ── STATUS MESSAGE ────────────────────────────────────── -->
+<div id="statusMsg" class="alert d-none mb-3"></div>
 
+<!-- ── DATA TABLE ────────────────────────────────────────── -->
+<div class="table-responsive">
+  <table class="table table-bordered" id="dataTable">
+    <thead class="table-dark">
+      <tr>
+        <th>Entity</th>
+        <th>State</th>
+        <th>Location</th>
+        <th>Status</th>
+        <th>Certificates</th>
+        <th>Address</th>
+        <th>Remarks</th>
+        <th style="min-width:140px">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="admin-table-body">
+      <tr><td colspan="8" class="text-center text-muted">Loading...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 
-let tableData = [];
-let editingId = null;
+  let tableData = [];  // all rows from Supabase
+  let editingId = null;
 
-async function loadData() {
-  const res = await fetch('/data');
-  tableData = await res.json();
-  renderTable(tableData);
-}
+  // ── HELPERS ────────────────────────────────────────────────
+  function showStatus(msg, type = 'success') {
+    const el = document.getElementById('statusMsg');
+    el.textContent = msg;
+    el.className = `alert alert-${type} mb-3`;
+    setTimeout(() => el.className = 'alert d-none mb-3', 3500);
+  }
 
-async function loadStates() {
-  const res = await fetch('/states');
-  const states = await res.json();
-  const select = document.getElementById('state');
-  select.innerHTML = '<option value="">-- All States --</option>';
-  states.forEach(s => {
-    select.innerHTML += `<option value="${s.state}">${s.state}</option>`;
-  });
-}
+  // ── 1. LOAD ALL DATA FROM SUPABASE ────────────────────────
+  async function loadData() {
+    const { data, error } = await db
+      .from('se_compliance')
+      .select('*')
+      .order('id', { ascending: true });
 
-async function loadLocations() {
-  const state = document.getElementById('state').value;
-  const locSelect = document.getElementById('location');
-  locSelect.innerHTML = '<option value="">-- All Locations --</option>';
+    if (error) {
+      showStatus('Failed to load data: ' + error.message, 'danger');
+      return;
+    }
 
-  if (!state) return renderTable(tableData);
+    tableData = data;
+    populateStateDropdown(data);
+    renderTable(data);
+  }
 
-  const res = await fetch(`/locations/${state}`);
-  const locs = await res.json();
+  // ── 2. FILL STATE DROPDOWN ─────────────────────────────────
+  function populateStateDropdown(data) {
+    const states = [...new Set(data.map(r => r.state).filter(Boolean))].sort();
+    const select = document.getElementById('state');
+    const current = select.value;
+    select.innerHTML = '<option value="">-- All States --</option>';
+    states.forEach(s => {
+      select.innerHTML += `<option value="${s}" ${s === current ? 'selected' : ''}>${s}</option>`;
+    });
+  }
 
-  locs.forEach(l => {
-    locSelect.innerHTML += `<option value="${l.location_name}">${l.location_name}</option>`;
-  });
+  // ── 3. STATE CHANGES → FILL LOCATIONS ─────────────────────
+  function onStateChange() {
+    const selectedState = document.getElementById('state').value;
+    const locSelect = document.getElementById('location');
+    locSelect.innerHTML = '<option value="">-- All Locations --</option>';
 
-  filterTable();
-}
+    if (selectedState) {
+      const locs = [...new Set(
+        tableData.filter(r => r.state === selectedState).map(r => r.location_name).filter(Boolean)
+      )].sort();
+      locs.forEach(l => {
+        locSelect.innerHTML += `<option value="${l}">${l}</option>`;
+      });
+    }
+    filterTable();
+  }
 
-function filterTable() {
-  const state = document.getElementById('state').value;
-  const location = document.getElementById('location').value;
+  // ── 4. FILTER TABLE ────────────────────────────────────────
+  function filterTable() {
+    const state = document.getElementById('state').value;
+    const loc   = document.getElementById('location').value;
+    let filtered = tableData;
+    if (state) filtered = filtered.filter(r => r.state === state);
+    if (loc)   filtered = filtered.filter(r => r.location_name === loc);
+    renderTable(filtered);
+  }
 
-  let filtered = tableData;
+  // ── 5. RENDER TABLE ────────────────────────────────────────
+  function renderTable(data) {
+    const tbody = document.getElementById('admin-table-body');
 
-  if (state) filtered = filtered.filter(r => r.state === state);
-  if (location) filtered = filtered.filter(r => r.location_name === location);
+    if (!data || data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No records found.</td></tr>';
+      return;
+    }
 
-  renderTable(filtered);
-}
+    tbody.innerHTML = data.map(row => {
+      // Parse certificate links (single URL or JSON array)
+      let certs = [];
+      if (row.certificate_link) {
+        try { certs = JSON.parse(row.certificate_link); }
+        catch { certs = [row.certificate_link]; }
+      }
 
-function renderTable(data) {
-  const tbody = document.querySelector('#dataTable tbody');
-  tbody.innerHTML = '';
+      const certDropdown = certs.length > 0
+        ? `<div class="dropdown mb-1">
+            <button class="btn btn-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
+              ${certs.length} Certificate${certs.length > 1 ? 's' : ''}
+            </button>
+            <ul class="dropdown-menu">
+              ${certs.map((c, i) => `
+                <li><a class="dropdown-item" href="${c}" target="_blank">View ${i === certs.length - 1 ? '(Latest)' : ''}</a></li>
+                <li><a class="dropdown-item" href="${c}" download>Download</a></li>
+              `).join('')}
+            </ul>
+           </div>`
+        : '<span class="text-muted">None</span>';
 
-  data.forEach(row => {
+      return `
+        <tr data-id="${row.id}">
+          <td>${row.entity        || '-'}</td>
+          <td>${row.state         || '-'}</td>
+          <td>${row.location_name || '-'}</td>
+          <td>${row.status        || '-'}</td>
+          <td>
+            ${certDropdown}
+            <button class="btn btn-info btn-sm mt-1" onclick="uploadCert(${row.id})">+ Upload</button>
+          </td>
+          <td>${row.address  || '-'}</td>
+          <td>${row.remarks  || '-'}</td>
+          <td>
+            <button class="btn btn-warning btn-sm" onclick="editRow(${row.id})">Edit</button>
+            <button class="btn btn-danger  btn-sm" onclick="deleteRow(${row.id})">Delete</button>
+          </td>
+        </tr>`;
+    }).join('');
+  }
 
-    let certs = [];
-    if (row.certificate_link) {
-      try {
-        certs = JSON.parse(row.certificate_link);
-      } catch {
-        certs = [row.certificate_link];
+  // ── 6. ADD NEW ROW ─────────────────────────────────────────
+  function addNewRow() {
+    if (document.querySelector('.newRow')) return; // prevent double-click
+
+    const tbody = document.getElementById('admin-table-body');
+    const newRowHTML = `
+      <tr class="newRow table-light">
+        <td><input name="entity"        class="form-control form-control-sm"></td>
+        <td><input name="state"         class="form-control form-control-sm"></td>
+        <td><input name="location_name" class="form-control form-control-sm"></td>
+        <td><input name="status"        class="form-control form-control-sm"></td>
+        <td><input type="file" name="certificate" class="form-control form-control-sm"></td>
+        <td><input name="address"       class="form-control form-control-sm"></td>
+        <td><input name="remarks"       class="form-control form-control-sm"></td>
+        <td>
+          <button class="btn btn-success btn-sm" onclick="saveNewRow()">Save</button>
+          <button class="btn btn-secondary btn-sm" onclick="cancelNewRow()">Cancel</button>
+        </td>
+      </tr>`;
+
+    tbody.insertAdjacentHTML('afterbegin', newRowHTML);
+  }
+
+  function cancelNewRow() {
+    const row = document.querySelector('.newRow');
+    if (row) row.remove();
+  }
+
+  async function saveNewRow() {
+    const row = document.querySelector('.newRow');
+    const get = name => row.querySelector(`[name="${name}"]`).value.trim();
+    const fileInput = row.querySelector('input[type="file"]');
+
+    const newRecord = {
+      entity:        get('entity'),
+      state:         get('state'),
+      location_name: get('location_name'),
+      status:        get('status'),
+      address:       get('address'),
+      remarks:       get('remarks'),
+      certificate_link: null
+    };
+
+    if (!newRecord.entity || !newRecord.state || !newRecord.location_name) {
+      showStatus('Entity, State and Location are required.', 'warning');
+      return;
+    }
+
+    // Upload certificate file first if provided
+    if (fileInput.files[0]) {
+      const url = await uploadFileToStorage(fileInput.files[0]);
+      if (url) newRecord.certificate_link = JSON.stringify([url]);
+    }
+
+    const { error } = await db.from('se_compliance').insert(newRecord);
+
+    if (error) {
+      showStatus('Failed to add record: ' + error.message, 'danger');
+    } else {
+      showStatus('Record added successfully!', 'success');
+      cancelNewRow();
+      loadData();
+    }
+  }
+
+  // ── 7. EDIT ROW ────────────────────────────────────────────
+  function editRow(id) {
+    if (editingId) {
+      showStatus('Please save or cancel the current edit first.', 'warning');
+      return;
+    }
+    editingId = id;
+
+    const tr = document.querySelector(`tr[data-id="${id}"]`);
+    const row = tableData.find(r => r.id === id);
+
+    tr.innerHTML = `
+      <td><input class="form-control form-control-sm" id="e-entity"   value="${row.entity        || ''}"></td>
+      <td><input class="form-control form-control-sm" id="e-state"    value="${row.state         || ''}"></td>
+      <td><input class="form-control form-control-sm" id="e-location" value="${row.location_name || ''}"></td>
+      <td><input class="form-control form-control-sm" id="e-status"   value="${row.status        || ''}"></td>
+      <td>
+        <small class="text-muted d-block mb-1">Upload new cert (optional):</small>
+        <input type="file" id="e-cert" class="form-control form-control-sm">
+      </td>
+      <td><input class="form-control form-control-sm" id="e-address"  value="${row.address  || ''}"></td>
+      <td><input class="form-control form-control-sm" id="e-remarks"  value="${row.remarks  || ''}"></td>
+      <td>
+        <button class="btn btn-success btn-sm" onclick="saveEdit(${id})">Save</button>
+        <button class="btn btn-secondary btn-sm" onclick="cancelEdit()">Cancel</button>
+      </td>`;
+  }
+
+  async function saveEdit(id) {
+    const row      = tableData.find(r => r.id === id);
+    const fileInput = document.getElementById('e-cert');
+
+    const updated = {
+      entity:        document.getElementById('e-entity').value.trim(),
+      state:         document.getElementById('e-state').value.trim(),
+      location_name: document.getElementById('e-location').value.trim(),
+      status:        document.getElementById('e-status').value.trim(),
+      address:       document.getElementById('e-address').value.trim(),
+      remarks:       document.getElementById('e-remarks').value.trim(),
+      updated_at:    new Date().toISOString()
+    };
+
+    // If a new file is uploaded, append its URL to existing cert list
+    if (fileInput && fileInput.files[0]) {
+      const newUrl = await uploadFileToStorage(fileInput.files[0]);
+      if (newUrl) {
+        let existing = [];
+        if (row.certificate_link) {
+          try { existing = JSON.parse(row.certificate_link); }
+          catch { existing = [row.certificate_link]; }
+        }
+        existing.push(newUrl);
+        updated.certificate_link = JSON.stringify(existing);
       }
     }
 
-    let certDropdown = 'None';
-    if (certs.length > 0) {
-      certDropdown = `
-      <div class="dropdown">
-        <button class="btn btn-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown">
-          ${certs.length} Certificates
-        </button>
-        <ul class="dropdown-menu">
-          ${certs.map((c,i)=>`
-            <li>
-              <a class="dropdown-item" href="${c}" target="_blank">
-                View ${i===certs.length-1?'(Latest)':''}
-              </a>
-              <a class="dropdown-item" href="${c}" download>
-                Download
-              </a>
-            </li>`).join('')}
-        </ul>
-      </div>`;
+    const { error } = await db
+      .from('se_compliance')
+      .update(updated)
+      .eq('id', id);
+
+    if (error) {
+      showStatus('Update failed: ' + error.message, 'danger');
+    } else {
+      showStatus('Record updated successfully!', 'success');
+      editingId = null;
+      loadData();
     }
-
-    tbody.innerHTML += `
-    <tr data-id="${row.id}">
-      <td>${row.entity}</td>
-      <td>${row.state}</td>
-      <td>${row.location_name}</td>
-      <td>${row.status}</td>
-      <td>
-        ${certDropdown}
-        <button class="btn btn-sm btn-info mt-1" onclick="uploadCert(${row.id})">Upload</button>
-      </td>
-      <td>${row.address}</td>
-      <td>${row.remarks}</td>
-      <td>
-        <button class="btn btn-warning btn-sm" onclick="editRow(${row.id})">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteRow(${row.id})">Delete</button>
-      </td>
-    </tr>`;
-  });
-}
-
-/* ================= ADD ROW ================= */
-
-function addNewRow() {
-  if (document.querySelector('.newRow')) return;
-
-  const tbody = document.querySelector('#dataTable tbody');
-
-  tbody.insertAdjacentHTML("afterbegin", `
-  <tr class="newRow">
-    <td><input name="entity" class="form-control"></td>
-    <td><input name="state" class="form-control"></td>
-    <td><input name="location_name" class="form-control"></td>
-    <td><input name="status" class="form-control"></td>
-    <td><input type="file" name="certificate" class="form-control"></td>
-    <td><input name="address" class="form-control"></td>
-    <td><input name="remarks" class="form-control"></td>
-    <td>
-      <button class="btn btn-success btn-sm" onclick="saveNewRow()">Save</button>
-      <button class="btn btn-secondary btn-sm" onclick="cancelNewRow()">Cancel</button>
-    </td>
-  </tr>`);
-}
-
-function cancelNewRow() {
-  const row = document.querySelector('.newRow');
-  if (row) row.remove();
-}
-
-async function saveNewRow() {
-  const row = document.querySelector('.newRow');
-  const formData = new FormData();
-
-  row.querySelectorAll('input').forEach(i=>{
-    if(i.type==='file' && i.files[0]) formData.append('certificate',i.files[0]);
-    else formData.append(i.name,i.value);
-  });
-
-  await fetch('/add-row',{method:'POST',body:formData});
-  loadData();
-}
-
-/* ================= EDIT ================= */
-
-function editRow(id) {
-
-  if (editingId) return;
-  editingId = id;
-
-  const tr = document.querySelector(`tr[data-id="${id}"]`);
-  const cells = tr.querySelectorAll("td");
-
-  cells[0].innerHTML = `<input class="form-control" value="${cells[0].innerText}">`;
-  cells[1].innerHTML = `<input class="form-control" value="${cells[1].innerText}">`;
-  cells[2].innerHTML = `<input class="form-control" value="${cells[2].innerText}">`;
-  cells[3].innerHTML = `<input class="form-control" value="${cells[3].innerText}">`;
-  cells[4].innerHTML = `<input type="file" class="form-control">`;
-  cells[5].innerHTML = `<input class="form-control" value="${cells[5].innerText}">`;
-  cells[6].innerHTML = `<input class="form-control" value="${cells[6].innerText}">`;
-
-  cells[7].innerHTML = `
-    <button class="btn btn-success btn-sm" onclick="saveEdit(${id})">Save</button>
-    <button class="btn btn-secondary btn-sm" onclick="cancelEdit()">Cancel</button>
-  `;
-}
-
-async function saveEdit(id) {
-
-  const tr = document.querySelector(`tr[data-id="${id}"]`);
-  const inputs = tr.querySelectorAll("input");
-
-  const formData = new FormData();
-
-  formData.append("entity", inputs[0].value);
-  formData.append("state", inputs[1].value);
-  formData.append("location_name", inputs[2].value);
-  formData.append("status", inputs[3].value);
-
-  if (inputs[4].files[0]) {
-    formData.append("certificate", inputs[4].files[0]);
   }
 
-  formData.append("address", inputs[5].value);
-  formData.append("remarks", inputs[6].value);
+  function cancelEdit() {
+    editingId = null;
+    loadData(); // re-render to restore the row
+  }
 
-  await fetch(`/edit-row/${id}`, {
-    method: "POST",
-    body: formData
-  });
+  // ── 8. DELETE ROW ──────────────────────────────────────────
+  async function deleteRow(id) {
+    if (!confirm('Are you sure you want to delete this record? This cannot be undone.')) return;
 
-  editingId = null;
-  loadData();
-}
+    const { error } = await db
+      .from('se_compliance')
+      .delete()
+      .eq('id', id);
 
-function cancelEdit() {
-  editingId = null;
-  loadData();
-}
+    if (error) {
+      showStatus('Delete failed: ' + error.message, 'danger');
+    } else {
+      showStatus('Record deleted.', 'success');
+      loadData();
+    }
+  }
 
-async function deleteRow(id){
-  if(!confirm("Delete?")) return;
-  await fetch(`/delete-row/${id}`,{method:'POST'});
-  loadData();
-}
+  // ── 9. UPLOAD CERTIFICATE (adds to existing certs list) ────
+  function uploadCert(id) {
+    const input = document.createElement('input');
+    input.type  = 'file';
+    input.accept = '.pdf,.jpg,.jpeg,.png';
 
-function uploadCert(id) {
-  const input = document.createElement('input');
-  input.type = 'file';
-  input.onchange = async e => {
-    const formData = new FormData();
-    formData.append('certificate', e.target.files[0]);
-    await fetch(`/edit-row/${id}`, { method:'POST', body:formData });
+    input.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      showStatus('Uploading certificate...', 'info');
+      const newUrl = await uploadFileToStorage(file);
+
+      if (!newUrl) {
+        showStatus('File upload failed. Check Supabase Storage bucket setup.', 'danger');
+        return;
+      }
+
+      // Append new URL to existing certificate list
+      const row = tableData.find(r => r.id === id);
+      let existing = [];
+      if (row.certificate_link) {
+        try { existing = JSON.parse(row.certificate_link); }
+        catch { existing = [row.certificate_link]; }
+      }
+      existing.push(newUrl);
+
+      const { error } = await db
+        .from('se_compliance')
+        .update({ certificate_link: JSON.stringify(existing) })
+        .eq('id', id);
+
+      if (error) {
+        showStatus('Saved upload URL failed: ' + error.message, 'danger');
+      } else {
+        showStatus('Certificate uploaded and saved!', 'success');
+        loadData();
+      }
+    };
+
+    input.click();
+  }
+
+  // ── 10. UPLOAD FILE TO SUPABASE STORAGE ───────────────────
+  // IMPORTANT: You must create a Storage bucket called "certificates"
+  // in Supabase → Storage → New Bucket → name: certificates → Public: ON
+  async function uploadFileToStorage(file) {
+    const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+
+    const { data, error } = await db.storage
+      .from('certificates')        // ← bucket name
+      .upload(fileName, file, { upsert: true });
+
+    if (error) {
+      console.error('Storage upload error:', error.message);
+      return null;
+    }
+
+    // Get the public URL for the uploaded file
+    const { data: urlData } = db.storage
+      .from('certificates')
+      .getPublicUrl(fileName);
+
+    return urlData.publicUrl;
+  }
+
+  // ── 11. LOGOUT ─────────────────────────────────────────────
+  function logout() {
+    sessionStorage.clear();
+    window.location.href = 'index.html';
+  }
+
+  // ── 12. INIT — CHECK ADMIN ACCESS THEN LOAD ────────────────
+  window.onload = function () {
+    const role = sessionStorage.getItem('user_role');
+    if (role !== 'admin') {
+      // Not an admin — send back to login
+      window.location.href = 'index.html';
+      return;
+    }
     loadData();
   };
-  input.click();
-}
-
-function logout(){
-  fetch('/logout').then(()=>window.location='/');
-}
-
-window.onload = ()=>{
-  loadStates();
-  loadData();
-};
 
 </script>
-
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
