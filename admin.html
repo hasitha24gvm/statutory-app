@@ -82,7 +82,7 @@
     const { data, error } = await db
       .from('se_compliance')
       .select('*')
-      .order('id', { ascending: true });
+      .order('state', { ascending: true });
 
     if (error) {
       showStatus('Failed to load data: ' + error.message, 'danger');
