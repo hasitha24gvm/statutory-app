@@ -61,7 +61,7 @@
     const { data, error } = await db
       .from('se_compliance')
       .select('*')
-      .order('id', { ascending: true });
+      .order('state', { ascending: true });
 
     if (error) {
       console.error('Error loading data:', error.message);
