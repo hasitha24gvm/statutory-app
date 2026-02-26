@@ -156,8 +156,16 @@
             </button>
             <ul class="dropdown-menu">
               ${certs.map((c, i) => `
-                <li><a class="dropdown-item" href="${c}" target="_blank">View ${i === certs.length - 1 ? '(Latest)' : ''}</a></li>
-                <li><a class="dropdown-item" href="${c}" download>Download</a></li>
+                <li>
+                  <div class="d-flex align-items-center px-2 py-1">
+                    <div class="me-2">
+                      <a class="dropdown-item p-0 mb-1" href="${c}" target="_blank">View ${i === certs.length - 1 ? '(Latest)' : 'Cert ' + (i + 1)}</a>
+                      <a class="dropdown-item p-0" href="${c}" download>Download</a>
+                    </div>
+                    <button class="btn btn-danger btn-sm ms-auto" style="font-size:11px;padding:2px 7px;" onclick="deleteCert(${row.id}, ${i})">Delete</button>
+                  </div>
+                </li>
+                ${i < certs.length - 1 ? '<li><hr class="dropdown-divider my-1"></li>' : ''}
               `).join('')}
             </ul>
            </div>`
@@ -340,7 +348,34 @@
     }
   }
 
-  // ── 9. UPLOAD CERTIFICATE (adds to existing certs list) ────
+  // ── 9. DELETE SINGLE CERTIFICATE FROM DROPDOWN ────────────
+  async function deleteCert(rowId, certIndex) {
+    if (!confirm('Delete this certificate? This cannot be undone.')) return;
+
+    const row = tableData.find(r => r.id === rowId);
+    let certs = [];
+    if (row.certificate_link) {
+      try { certs = JSON.parse(row.certificate_link); }
+      catch { certs = [row.certificate_link]; }
+    }
+
+    // Remove the certificate at the clicked index
+    certs.splice(certIndex, 1);
+
+    const { error } = await db
+      .from('se_compliance')
+      .update({ certificate_link: certs.length > 0 ? JSON.stringify(certs) : null })
+      .eq('id', rowId);
+
+    if (error) {
+      showStatus('Failed to delete certificate: ' + error.message, 'danger');
+    } else {
+      showStatus('Certificate deleted successfully!', 'success');
+      loadData();
+    }
+  }
+
+  // ── 10. UPLOAD CERTIFICATE (adds to existing certs list) ────
   function uploadCert(id) {
     const input = document.createElement('input');
     input.type  = 'file';
@@ -383,7 +418,7 @@
     input.click();
   }
 
-  // ── 10. UPLOAD FILE TO SUPABASE STORAGE ───────────────────
+  // ── 11. UPLOAD FILE TO SUPABASE STORAGE ───────────────────
   // IMPORTANT: You must create a Storage bucket called "certificates"
   // in Supabase → Storage → New Bucket → name: certificates → Public: ON
   async function uploadFileToStorage(file) {
@@ -406,13 +441,13 @@
     return urlData.publicUrl;
   }
 
-  // ── 11. LOGOUT ─────────────────────────────────────────────
+  // ── 12. LOGOUT ─────────────────────────────────────────────
   function logout() {
     sessionStorage.clear();
     window.location.href = 'index.html';
   }
 
-  // ── 12. INIT — CHECK ADMIN ACCESS THEN LOAD ────────────────
+  // ── 13. INIT — CHECK ADMIN ACCESS THEN LOAD ────────────────
   window.onload = function () {
     const role = sessionStorage.getItem('user_role');
     if (role !== 'admin') {
