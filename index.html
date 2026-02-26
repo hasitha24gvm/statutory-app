@@ -183,19 +183,51 @@
     btn.textContent = 'Signing in...';
 
     try {
-      // Query app_users table for matching active user
-      const { data, error } = await db
-        .from('app_users')
-        .select('*')
-        .eq('email', email)
-        .eq('password', password)
-        .eq('active', true)
-        .single();
+  // Check app_users table for role
+  const { data: userData, error: userError } = await db
+    .from('app_users')
+    .select('*')
+    .eq('email', email)
+    .eq('active', true)
+    .single();
 
-      if (error || !data) {
-        showError('Invalid email or password. Please try again.');
-        return;
-      }
+  if (userError || !userData) {
+    showError('Email not registered. Contact your admin.');
+    return;
+  }
+
+  // ADMIN: password login
+  if (userData.role === 'admin') {
+    if (userData.password !== password) {
+      showError('Invalid admin password.');
+      return;
+    }
+    sessionStorage.setItem('user_email', userData.email);
+    sessionStorage.setItem('user_role', 'admin');
+    window.location.href = 'admin.html';
+    return;
+  }
+
+  // USER: verify OTP sent by Supabase
+  const { data: otpData, error: otpError } = await db.auth.verifyOtp({
+    email: email,
+    token: password,
+    type: 'email'
+  });
+
+  if (otpError || !otpData.user) {
+    showError('Invalid or expired OTP. Please request a new code.');
+    return;
+  }
+
+  sessionStorage.setItem('user_email', userData.email);
+  sessionStorage.setItem('user_role', 'user');
+  window.location.href = 'main.html';
+
+} catch (err) {
+  showError('Something went wrong: ' + err.message);
+  console.error(err);
+});
 
       // Save user info for the session (used by main.html and admin.html)
       sessionStorage.setItem('user_email', data.email);
@@ -249,11 +281,38 @@
     btn.textContent = 'Sending...';
 
     try {
-      // Send a one-time password (OTP) via Supabase Auth
-      const { error } = await db.auth.signInWithOtp({
-        email: email,
-        options: { shouldCreateUser: false } // only works for existing Supabase Auth users
-      });
+  // First check if email exists in app_users
+  const { data: user } = await db
+    .from('app_users')
+    .select('email, role')
+    .eq('email', email)
+    .eq('active', true)
+    .single();
+
+  if (!user) {
+    showError('This email is not registered. Contact your admin.');
+    return;
+  }
+
+  if (user.role === 'admin') {
+    showError('Admins use password login. No code needed.');
+    return;
+  }
+
+  // Send OTP via Supabase Auth
+  const { error } = await db.auth.signInWithOtp({
+    email: email,
+    options: { shouldCreateUser: false }
+  });
+
+  if (error) {
+    showError('Failed to send code: ' + error.message);
+  } else {
+    showSuccess('Code sent! Check your inbox and spam folder.');
+  }
+} catch (err) {
+  showError('Network error: ' + err.message);
+});
 
       if (error) {
         // Fallback message — OTP requires Supabase Auth users to be set up separately
