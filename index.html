@@ -138,7 +138,6 @@
 
     </div>
 
-    <!-- Error and success messages shown here instead of alert() -->
     <p class="error-msg"   id="errorMsg"></p>
     <p class="success-msg" id="successMsg"></p>
 
@@ -169,8 +168,7 @@
     document.getElementById('successMsg').style.display = 'none';
   }
 
-  // ── LOGIN ────────────────────────────────────────────────────
-  // Checks the email + password against your app_users table in Supabase
+  // ── SIGN IN ──────────────────────────────────────────────────
   document.getElementById('loginForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     clearMessages();
@@ -183,65 +181,50 @@
     btn.textContent = 'Signing in...';
 
     try {
-  // Check app_users table for role
-  const { data: userData, error: userError } = await db
-    .from('app_users')
-    .select('*')
-    .eq('email', email)
-    .eq('active', true)
-    .single();
+      // Step 1: Check if email is in app_users table and is active
+      const { data: userData, error: userError } = await db
+        .from('app_users')
+        .select('*')
+        .eq('email', email)
+        .eq('active', true)
+        .single();
 
-  if (userError || !userData) {
-    showError('Email not registered. Contact your admin.');
-    return;
-  }
-
-  // ADMIN: password login
-  if (userData.role === 'admin') {
-    if (userData.password !== password) {
-      showError('Invalid admin password.');
-      return;
-    }
-    sessionStorage.setItem('user_email', userData.email);
-    sessionStorage.setItem('user_role', 'admin');
-    window.location.href = 'admin.html';
-    return;
-  }
-
-  // USER: verify OTP sent by Supabase
-  const { data: otpData, error: otpError } = await db.auth.verifyOtp({
-    email: email,
-    token: password,
-    type: 'email'
-  });
-
-  if (otpError || !otpData.user) {
-    showError('Invalid or expired OTP. Please request a new code.');
-    return;
-  }
-
-  sessionStorage.setItem('user_email', userData.email);
-  sessionStorage.setItem('user_role', 'user');
-  window.location.href = 'main.html';
-
-} catch (err) {
-  showError('Something went wrong: ' + err.message);
-  console.error(err);
-});
-
-      // Save user info for the session (used by main.html and admin.html)
-      sessionStorage.setItem('user_email', data.email);
-      sessionStorage.setItem('user_role',  data.role);
-
-      // Redirect based on role
-      if (data.role === 'admin') {
-        window.location.href = 'admin.html';
-      } else {
-        window.location.href = 'main.html';
+      if (userError || !userData) {
+        showError('Email not registered. Contact your admin.');
+        return;
       }
 
+      // Step 2: ADMIN — use password login
+      if (userData.role === 'admin') {
+        if (userData.password !== password) {
+          showError('Invalid admin password. Try again.');
+          return;
+        }
+        sessionStorage.setItem('user_email', userData.email);
+        sessionStorage.setItem('user_role', 'admin');
+        window.location.href = 'admin.html';
+        return;
+      }
+
+      // Step 3: USER — verify OTP code from Supabase email
+      const { data: otpData, error: otpError } = await db.auth.verifyOtp({
+        email: email,
+        token: password,
+        type: 'email'
+      });
+
+      if (otpError || !otpData || !otpData.user) {
+        showError('Invalid or expired code. Click "Send Code" again and try.');
+        return;
+      }
+
+      // OTP verified — save session and go to user dashboard
+      sessionStorage.setItem('user_email', userData.email);
+      sessionStorage.setItem('user_role', 'user');
+      window.location.href = 'main.html';
+
     } catch (err) {
-      showError('Something went wrong. Please check your connection.');
+      showError('Something went wrong: ' + err.message);
       console.error(err);
     } finally {
       btn.disabled    = false;
@@ -250,9 +233,6 @@
   });
 
   // ── SEND OTP CODE ────────────────────────────────────────────
-  // Uses Supabase Auth built-in magic link / OTP — no server needed
-  // NOTE: For this to work, go to Supabase → Authentication → Email Templates
-  // and make sure "Magic Link" or "OTP" is enabled.
   document.getElementById('sendCodeBtn').addEventListener('click', async () => {
     clearMessages();
 
@@ -264,66 +244,45 @@
       return;
     }
 
-    // Check if this email exists and is active in your app_users table
-    const { data: user } = await db
-      .from('app_users')
-      .select('email')
-      .eq('email', email)
-      .eq('active', true)
-      .single();
-
-    if (!user) {
-      showError('This email is not registered. Contact your admin.');
-      return;
-    }
-
     btn.disabled    = true;
     btn.textContent = 'Sending...';
 
     try {
-  // First check if email exists in app_users
-  const { data: user } = await db
-    .from('app_users')
-    .select('email, role')
-    .eq('email', email)
-    .eq('active', true)
-    .single();
+      // Step 1: Check if email is in app_users and active
+      const { data: user, error: fetchError } = await db
+        .from('app_users')
+        .select('email, role')
+        .eq('email', email)
+        .eq('active', true)
+        .single();
 
-  if (!user) {
-    showError('This email is not registered. Contact your admin.');
-    return;
-  }
+      if (fetchError || !user) {
+        showError('This email is not registered. Contact your admin.');
+        return;
+      }
 
-  if (user.role === 'admin') {
-    showError('Admins use password login. No code needed.');
-    return;
-  }
+      // Step 2: Block admins — they use password not OTP
+      if (user.role === 'admin') {
+        showError('Admins use password login. No code needed.');
+        return;
+      }
 
-  // Send OTP via Supabase Auth
-  const { error } = await db.auth.signInWithOtp({
-    email: email,
-    options: { shouldCreateUser: false }
-  });
-
-  if (error) {
-    showError('Failed to send code: ' + error.message);
-  } else {
-    showSuccess('Code sent! Check your inbox and spam folder.');
-  }
-} catch (err) {
-  showError('Network error: ' + err.message);
-});
+      // Step 3: Send OTP via Supabase Auth
+      const { error } = await db.auth.signInWithOtp({
+        email: email,
+        options: { shouldCreateUser: false }
+      });
 
       if (error) {
-        // Fallback message — OTP requires Supabase Auth users to be set up separately
-        showError('OTP sending failed. Use your password to log in, or ask admin to enable OTP.');
-        console.error('OTP error:', error.message);
+        // Common reason: user not in Supabase Auth yet
+        showError('Could not send code: ' + error.message + '. Ask admin to add you in Supabase Auth.');
+        console.error('OTP error:', error);
       } else {
-        showSuccess('Code sent! Check your inbox (and spam folder).');
+        showSuccess('Code sent! Check your inbox and spam folder. Valid for 1 hour.');
       }
 
     } catch (err) {
-      showError('Something went wrong while sending the code.');
+      showError('Network error: ' + err.message);
       console.error(err);
     } finally {
       btn.disabled    = false;
@@ -333,19 +292,19 @@
 
   // ── PASSWORD SHOW/HIDE TOGGLE ────────────────────────────────
   document.getElementById('togglePassword').addEventListener('click', () => {
-    const input  = document.getElementById('password');
-    const icon   = document.getElementById('togglePassword');
+    const input    = document.getElementById('password');
+    const icon     = document.getElementById('togglePassword');
     const isHidden = input.type === 'password';
-    input.type   = isHidden ? 'text' : 'password';
-    icon.classList.toggle('bi-eye',      isHidden);
+    input.type     = isHidden ? 'text' : 'password';
+    icon.classList.toggle('bi-eye',       isHidden);
     icon.classList.toggle('bi-eye-slash', !isHidden);
   });
 
   // ── AUTO REDIRECT IF ALREADY LOGGED IN ──────────────────────
   window.onload = function () {
     const role = sessionStorage.getItem('user_role');
-    if (role === 'admin')  { window.location.href = 'admin.html'; }
-    else if (role)         { window.location.href = 'main.html';  }
+    if (role === 'admin') { window.location.href = 'admin.html'; }
+    else if (role)        { window.location.href = 'main.html';  }
   };
 
 </script>
